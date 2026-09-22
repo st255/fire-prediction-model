@@ -1,0 +1,9 @@
+-Demografia
+-Tiempo como seno o coseno
+
+
+
+
+AE
+-Dimensión sobre extendida: elegir por rendimiento
+-K reducida con rendimiento: elegir por punto de codo
