@@ -1,6 +1,6 @@
 # Wildfire Prediction in Castilla y León
 
-Classification model that estimates the probability of a wildfire at a specific point and day in Castilla y León. It combines the historical fire record (2006-2023) with daily weather data, vegetation maps, terrain and population.
+Classification model that estimates the probability of a wildfire at a specific point and day in Castilla y León. It combines the historical fire record (2006-2023) with daily weather data, vegetation maps, terrain and population, and turns its predictions into daily wildfire risk maps of the whole region.
 
 | | Temporal ROC-AUC | Spatial ROC-AUC |
 | --- | :---: | :---: |
@@ -8,6 +8,8 @@ Classification model that estimates the probability of a wildfire at a specific 
 
 - **Temporal**: ability to predict fires in future years the model has not seen.
 - **Spatial**: ability to predict fires in areas of the map the model has not seen.
+
+![Mean wildfire risk and fires in 2023](images/heatmap_year.png)
 
 ---
 
@@ -18,9 +20,10 @@ Classification model that estimates the probability of a wildfire at a specific 
 3. [Validation strategy](#validation-strategy)
 4. [Model comparison](#model-comparison)
 5. [Best model tuning](#best-model-tuning)
-6. [Conclusions](#conclusions)
-7. [Repository structure](#repository-structure)
-8. [Requirements](#requirements)
+6. [Risk maps](#risk-maps)
+7. [Conclusions](#conclusions)
+8. [Repository structure](#repository-structure)
+9. [Requirements](#requirements)
 
 ---
 
@@ -166,6 +169,44 @@ The final model, trained with all the data, is saved in `best_model.txt` and can
 
 ---
 
+## Risk maps
+
+[`heatmap.ipynb`](heatmap.ipynb) uses the model to draw daily wildfire risk maps of 2023, the last year of the dataset, and checks them against the real fires.
+
+1. **Model**: the tuned LightGBM is trained again only with data before 2023 (with the 90-day gap), so 2023 is never seen during training. It reaches a ROC-AUC of **0.780** on the 2023 records.
+2. **Grid**: the region is covered with a regular grid of points every 0.03° (about 3 km), **11,350 points** inside the Forest Map. Each point gets the same static variables as the dataset: vegetation, population and terrain.
+3. **Weather**: the weather variables are computed for every day of 2023, with one extra year before so the rolling windows and dry days are complete from January.
+4. **Daily risk**: every point is scored on every day (about 4 million predictions), with the weather of its nearest 0.1° cell.
+5. **Relative risk**: the model is trained with a 33% fire rate, so its outputs rank the risk but are not real probabilities. Each day, the scores are turned into percentiles: 1 is the riskiest point of the region that day and 0 the safest.
+
+### Evaluation
+
+Each of the **928 fires** of 2023 is placed in its nearest grid point and checked against the risk of that same day. If the map were random, the riskiest 10% of the region would hold 10% of the fires.
+
+Two maps are compared:
+
+- **Daily map**: the risk of the day of each fire.
+- **Static map**: the mean risk of each point over the year, the same every day. It only shows *where* fires usually happen.
+
+| Riskiest share of the region | Random | Static map | Daily map |
+| :---: | :---: | :---: | :---: |
+| 10% | 10% | 28% | **33%** |
+| 20% | 20% | 43% | **50%** |
+
+The riskiest 10% of the region holds a third of the fires, 3.3 times more than a random map. Most of the gain already comes from the location (static map), and the weather of each day adds about 5-7 points more.
+
+![Fires captured by the riskiest areas](images/heatmap_capture.png)
+
+### Maps
+
+Light points are the safest of the region and dark points the riskiest. The fires are drawn in orange.
+
+The mean map of the year (at the top of this document) shows the areas with the highest risk: the west of León and Zamora and the southern mountains of Salamanca and Ávila. The daily maps show how the risk moves with the weather. The 4 days with the most fires of 2023:
+
+![Days with the most fires in 2023](images/heatmap_days.png)
+
+---
+
 ## Conclusions
 
 - **Wildfire risk can be predicted with good discrimination**: the final model reaches a ROC-AUC of 0.80 in future years and 0.77 in new areas. These scores measure how well the model separates fires from the sampled negatives. The predicted probabilities assume a fire rate of 33%, so they are not real-world probabilities.
@@ -174,6 +215,7 @@ The final model, trained with all the data, is saved in `best_model.txt` and can
 - **Non-linear effects and interactions matter**: Logistic Regression scores 0.06-0.08 AUC below boosting, so the risk is not well explained by adding up a linear effect of each variable. Thresholds (such as a long dry period) and combinations (heat, wind and dryness at the same time) are key.
 - **Generalizing to new areas is harder than to new years, and the limit is the data**: the best models lose about 0.03 AUC in the spatial test. Moreover, in the spatial test the seven best models are within 0.01 AUC of each other, while in the temporal test they spread over 0.03. A more complex model helps to predict new years, but not new areas.
 - **Terrain and population weigh more than weather**: slope, elevation, population and orientation are the most important variables. This may partly come from how the negatives are generated (random points inside forest areas). In the temporal test the model has already seen the same locations, so these static variables can act as a memory of where fires are usually recorded, which would also explain the gap with the spatial test.
+- **The risk maps are useful, mostly because of the location**: the riskiest 10% of the region holds 33% of the 2023 fires. A static map of the mean risk already holds 28%, so the weather of each day adds a smaller part, which agrees with the variable importance.
 - **Hyperparameter tuning adds little**: around +0.005 AUC. The improvement is consistent, but it shows the model is close to its limit with the current variables. The next improvements should come from the data, not from the model.
 
 ## Next steps
@@ -182,4 +224,31 @@ The final model, trained with all the data, is saved in `best_model.txt` and can
 - [ ] Compute slope and orientation from a high-resolution elevation model (such as the IGN MDT25) instead of the 0.1° grid.
 - [ ] Add new variables, such as distance to roads and towns, land use or satellite vegetation indices.
 - [ ] Reduce the redundancy between rolling-window variables: PCA for the linear, distance-based and neural models, and SHAP-based feature selection for boosting.
-- [ ] Calibrate the probabilities to the real fire rate and build an inference module that generates daily wildfire probability maps.
+- [ ] Calibrate the probabilities to the real fire rate, so the maps show real probabilities instead of relative risk.
+
+---
+
+## Repository structure
+
+```
+├── data/                     # Original data (not included)
+├── images/                   # Plots used in this document
+├── preprocessing.ipynb       # Cleaning, merging of the sources and creation of dataset.csv
+├── dataset_analysis.ipynb    # Exploratory analysis of the dataset
+├── models.ipynb              # Model comparison with temporal and spatial validation
+├── bestmodel.ipynb           # LightGBM tuning and final evaluation
+├── heatmap.ipynb             # Daily wildfire risk maps of 2023
+├── dataset.csv               # Final dataset
+└── best_model.txt            # Final trained model
+```
+
+The notebooks run in this order: `preprocessing` → `dataset_analysis` → `models` → `bestmodel` → `heatmap`.
+
+---
+
+## Requirements
+
+- Python 3.12
+- Data: `pandas`, `numpy`, `geopandas`, `xarray`, `netCDF4`, `pyproj`, `scipy`
+- Models: `scikit-learn`, `xgboost`, `lightgbm`, `catboost`, `optuna`
+- Plots: `matplotlib`, `seaborn`
