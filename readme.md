@@ -231,7 +231,7 @@ The mean map of the year (at the top of this document) shows the areas with the 
 ## Repository structure
 
 ```
-├── data/                     # Original data (not included)
+├── data/                     # Original data (not included because of size)
 ├── images/                   # Plots used in this document
 ├── preprocessing.ipynb       # Cleaning, merging of the sources and creation of dataset.csv
 ├── dataset_analysis.ipynb    # Exploratory analysis of the dataset
