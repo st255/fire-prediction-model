@@ -168,41 +168,18 @@ The final model, trained with all the data, is saved in `best_model.txt` and can
 
 ## Conclusions
 
-- **Wildfire risk can be predicted with moderate-high accuracy**: the final model reaches a ROC-AUC of 0.80 in future years and 0.77 in new areas.
-- **Boosting is the best family**: LightGBM, XGBoost, CatBoost and HistGradientBoosting are practically tied, with differences smaller than the variation between years. LightGBM is the best choice because it trains 5 to 6 times faster than XGBoost or CatBoost.
-- **Interactions between variables matter**: Logistic Regression scores about 0.08 AUC below boosting, so the risk is not well explained by adding up the effect of each variable separately.
-- **Generalizing to new areas is harder than to new years**: the best models lose about 0.03 AUC in the spatial test.
+- **Wildfire risk can be predicted with good discrimination**: the final model reaches a ROC-AUC of 0.80 in future years and 0.77 in new areas. These scores measure how well the model separates fires from the sampled negatives. The predicted probabilities assume a fire rate of 33%, so they are not real-world probabilities.
+- **Tree ensembles fit this data best**: the dataset is tabular and heterogeneous, with continuous weather variables, ordinal and one-hot vegetation codes, very different scales and many correlated variables (such as the rolling windows). Tree-based models handle all of this by design: they split on thresholds, are not affected by scale, tolerate redundant variables and capture interactions without having to define them. The MLP, which is sensitive to these issues, only reaches the level of bagging.
+- **Boosting is the best family**: boosting builds each tree to correct the errors of the previous ones, while bagging averages independent trees. Boosting beats bagging by 0.02-0.03 AUC in the temporal test. LightGBM, XGBoost, CatBoost and HistGradientBoosting are practically tied, with differences smaller than the variation between years. LightGBM is the best choice because it trains 5 to 6 times faster than XGBoost or CatBoost.
+- **Non-linear effects and interactions matter**: Logistic Regression scores 0.06-0.08 AUC below boosting, so the risk is not well explained by adding up a linear effect of each variable. Thresholds (such as a long dry period) and combinations (heat, wind and dryness at the same time) are key.
+- **Generalizing to new areas is harder than to new years, and the limit is the data**: the best models lose about 0.03 AUC in the spatial test. Moreover, in the spatial test the seven best models are within 0.01 AUC of each other, while in the temporal test they spread over 0.03. A more complex model helps to predict new years, but not new areas.
+- **Terrain and population weigh more than weather**: slope, elevation, population and orientation are the most important variables. This may partly come from how the negatives are generated (random points inside forest areas). In the temporal test the model has already seen the same locations, so these static variables can act as a memory of where fires are usually recorded, which would also explain the gap with the spatial test.
 - **Hyperparameter tuning adds little**: around +0.005 AUC. The improvement is consistent, but it shows the model is close to its limit with the current variables. The next improvements should come from the data, not from the model.
-- **Terrain and population weigh more than weather**: slope, elevation, population and orientation are the most important variables. This may partly come from how the negatives are generated (random points inside forest areas), so it is worth checking that the model is not just learning where fires are usually recorded.
 
-### Next steps
+## Next steps
 
-- Review the negative sampling to reduce the possible spatial bias.
-- Add new variables, such as distance to roads and towns, land use or satellite vegetation indices.
-- Build an inference module that generates daily wildfire probability maps.
-
----
-
-## Repository structure
-
-```
-├── data/                     # Raw data (not included)
-├── images/                   # Figures used in this document
-├── preprocessing.ipynb       # Cleaning, source merging and dataset.csv generation
-├── dataset_analysis.ipynb    # Exploratory analysis of the dataset
-├── models.ipynb              # Model comparison with temporal and spatial validation
-├── bestmodel.ipynb           # LightGBM tuning and final evaluation
-├── dataset.csv               # Final dataset
-└── best_model.txt            # Final trained model
-```
-
-Run the notebooks in this order: `preprocessing` → `dataset_analysis` → `models` → `bestmodel`.
-
----
-
-## Requirements
-
-- Python 3.12
-- Data: `pandas`, `numpy`, `geopandas`, `xarray`, `netCDF4`, `pyproj`
-- Models: `scikit-learn`, `xgboost`, `lightgbm`, `catboost`, `optuna`
-- Plots: `matplotlib`, `seaborn`
+- [ ] Review the negative sampling to avoid bias.
+- [ ] Compute slope and orientation from a high-resolution elevation model (such as the IGN MDT25) instead of the 0.1° grid.
+- [ ] Add new variables, such as distance to roads and towns, land use or satellite vegetation indices.
+- [ ] Reduce the redundancy between rolling-window variables: PCA for the linear, distance-based and neural models, and SHAP-based feature selection for boosting.
+- [ ] Calibrate the probabilities to the real fire rate and build an inference module that generates daily wildfire probability maps.
